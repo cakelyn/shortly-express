@@ -7,6 +7,8 @@ var Users = require('../app/collections/users');
 var User = require('../app/models/user');
 var Links = require('../app/collections/links');
 var Link = require('../app/models/link');
+var bcrypt = require('bcrypt-nodejs');
+var util = require('../lib/utility');
 
 /************************************************************/
 // Mocha doesn't have a way to designate pending before blocks.
@@ -53,10 +55,10 @@ describe('', function() {
       .del()
       .catch(function(error) {
         // uncomment when writing authentication tests
-        // throw {
-        //   type: 'DatabaseError',
-        //   message: 'Failed to create test setup data'
-        // };
+        throw {
+          type: 'DatabaseError',
+          message: 'Failed to create test setup data'
+        };
       });
 
     // delete user Phillip from db so it can be created later for the test
@@ -65,10 +67,21 @@ describe('', function() {
       .del()
       .catch(function(error) {
         // uncomment when writing authentication tests
-        // throw {
-        //   type: 'DatabaseError',
-        //   message: 'Failed to create test setup data'
-        // };
+        throw {
+          type: 'DatabaseError',
+          message: 'Failed to create test setup data'
+        };
+      });
+
+    db.knex('users')
+      .where('username', '=', 'Grace')
+      .del()
+      .catch(function(error) {
+        // uncomment when writing authentication tests
+        throw {
+          type: 'DatabaseError',
+          message: 'Failed to create test setup data'
+        };
       });
   });
 
@@ -76,7 +89,7 @@ describe('', function() {
 
     var requestWithSession = request.defaults({jar: true});
 
-    xbeforeEach(function(done) {
+    beforeEach(function(done) {
       // create a user that we can then log-in with
       new User({
         'username': 'Phillip',
@@ -226,7 +239,7 @@ describe('', function() {
 
   }); // 'Link creation'
 
-  xdescribe('Privileged Access:', function() {
+  describe('Privileged Access:', function() {
 
     it('Redirects to login page if a user tries to access the main page and is not signed in', function(done) {
       request('http://127.0.0.1:4568/', function(error, res, body) {
@@ -249,9 +262,23 @@ describe('', function() {
       });
     });
 
+    it('Redirects to login page if a user tries to post a link and is not signed in', function(done) {
+      request({'method': 'POST',
+                          'followAllRedirects': true,
+                          'uri': 'http://127.0.0.1:4568/links',
+                          'json': {
+                            'url': 'http://roflzoo.com/'
+                          }
+        }, function(error, res, body) {
+        expect(res.req.path).to.equal('/login');
+        done();
+      });
+    });
+
+
   }); // 'Priviledged Access'
 
-  xdescribe('Account Creation:', function() {
+  describe('Account Creation:', function() {
 
     it('Signup creates a user record', function(done) {
       var options = {
@@ -299,7 +326,7 @@ describe('', function() {
 
   }); // 'Account Creation'
 
-  xdescribe('Account Login:', function() {
+  describe('Account Login:', function() {
 
     var requestWithSession = request.defaults({jar: true});
 
@@ -344,6 +371,42 @@ describe('', function() {
       });
     });
 
+    it('Should hash passwords', function(done) {
+      new User({ 'username': 'Grace', 'password': 'dogs' }).fetch().then(function() {
+        bcrypt.hash('dogs', null, null, function(err, hash) {
+          Users.create({
+            username: 'Grace',
+            password: hash
+          }).then(function(user) {
+            expect(user.attributes.password).to.not.equal('dogs');
+            done();
+          });
+        });
+      });
+    });
+
+    it('Should only allow unique usernames', function(done) {
+      new User({
+        'username': 'Grace'
+      }).save().then(function() {
+        done();
+      });
+
+      var options = {
+        'method': 'POST',
+        'uri': 'http://127.0.0.1:4568/signup',
+        'json': {
+          'username': 'Grace'
+        }
+      };
+
+      requestWithSession(options, function(error, res, body) {
+        expect(res.headers.location).to.equal('/login');
+        done();
+      });
+    });
+
   }); // 'Account Login'
+
 
 });
